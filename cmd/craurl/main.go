@@ -25,13 +25,18 @@ func main() {
 		log.Fatal("file not found")
 	}
 
-	// init
-	c, err := craurl.NewFromFile(fp)
+	// open the file for reading
+	file, err := os.Open(fp)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// defer closing the crawler
-	defer c.Teardown()
+	defer file.Close()
+
+	// init
+	c, err := craurl.New(file)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	ctx := context.Background()
 

@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -16,56 +15,49 @@ import (
 
 const maxGoroutines = 100
 
+var requestMethod = "GET"
+
 // Craurl represents a url crawler.
 type Craurl struct {
-	reader io.ReadSeekCloser
+	source io.Reader
 }
 
-// NewFromFile retrurn a new instance of Craurl that reads from a file sorce.
-func NewFromFile(source string) (*Craurl, error) {
-	// open the file for reading
-	file, err := os.Open(source)
-	if err != nil {
-		return nil, err
-	}
-
-	c := Craurl{reader: file}
+// New retrurn a new instance of Craurl.
+func New(source io.Reader) (*Craurl, error) {
+	c := Craurl{source: source}
 	return &c, nil
-}
-
-// Teardown gracefully stops the Craurl instance.
-func (c *Craurl) Teardown() error {
-	// close the file
-	log.Print("stopping..")
-	return c.reader.Close()
 }
 
 // Crawl holds the main logic of a Craurl. It reads urls from source and calls
 // them in parallel. Then it waits for the response and it traces its http
 // status.
 func (c *Craurl) Crawl(ctx context.Context) error {
-	scanner := bufio.NewScanner(c.reader)
-	g, ctx := errgroup.WithContext(ctx)
+	scanner := bufio.NewScanner(c.source)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var scannerErr error
+
+	// keep looping until source is fully consumed or an error occurs
 	for {
+		g, ctx := errgroup.WithContext(ctx)
+		var scannerErr error
+
 		for i := 0; i < maxGoroutines; i++ {
 			ok := scanner.Scan()
 			if !ok {
 				scannerErr = scanner.Err()
 				if scannerErr == nil {
+					// scanner returns false and nil error only in case of EOF
 					scannerErr = io.EOF
 				}
 				break
 			}
-			// parse url
+
 			url := scanner.Text()
 
 			g.Go(func() error {
+				url := url
 				log.Printf("calling %s", url)
-				// call url
-				req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+				req, err := http.NewRequestWithContext(ctx, requestMethod, url, nil)
 				if err != nil {
 					return err
 				}
@@ -75,7 +67,6 @@ func (c *Craurl) Crawl(ctx context.Context) error {
 				}
 				defer resp.Body.Close()
 
-				// read status from response
 				status := resp.StatusCode
 				timestamp := time.Now().UTC()
 				fmt.Printf("%s   %d  %s\n", url, status, timestamp)
