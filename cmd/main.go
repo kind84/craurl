@@ -6,7 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/kind84/craurl"
+	"github.com/kind84/craurl/crawler"
+	"github.com/kind84/craurl/storer"
 )
 
 func main() {
@@ -25,15 +26,28 @@ func main() {
 		log.Fatal("file not found")
 	}
 
-	// open the file for reading
-	file, err := os.Open(fp)
+	// open the source for reading
+	source, err := os.Open(fp)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
+	defer source.Close()
 
-	// init
-	c, err := craurl.New(file)
+	// create output file
+	output, err := os.Create("out.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer output.Close()
+
+	// init file storer
+	storer, err := storer.NewFileStorer(output)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// init url crawler
+	c, err := crawler.New(source, storer)
 	if err != nil {
 		log.Fatal(err)
 	}
