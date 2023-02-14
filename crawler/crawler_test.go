@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	testData         = "../testdata/urls.txt"
-	manyURLsTestData = "../testdata/many-urls.txt"
-	badTestData      = "../testdata/bad-url.txt"
-	tooLongData      = "../testdata/too-long.txt"
+	testData                    = "../testdata/urls.txt"
+	manyURLsTestData            = "../testdata/many-urls.txt"
+	manyURLsWithABadURLTestData = "../testdata/many-urls-with-a-bad-url.txt"
+	badTestData                 = "../testdata/bad-url.txt"
+	tooLongData                 = "../testdata/too-long.txt"
 )
 
 func initTestData(source string, urls *map[string]int) error {
@@ -59,7 +60,7 @@ func TestCrawl(t *testing.T) {
 	testcases := []struct {
 		name          string
 		data          string
-		setup         func(m *mockStorer, expectedURLs, actualURLs *map[string]int)
+		setup         func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int)
 		teardown      func()
 		expectedError string
 	}{
@@ -71,7 +72,7 @@ func TestCrawl(t *testing.T) {
 		{
 			name: "bad request method error",
 			data: testData,
-			setup: func(m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
 				requestMethod = "@"
 			},
 			teardown: func() {
@@ -89,9 +90,9 @@ func TestCrawl(t *testing.T) {
 			data: os.DevNull,
 		},
 		{
-			name: "storer error",
+			name: "early storer error",
 			data: testData,
-			setup: func(m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
 				err := initTestData(testData, expectedURLs)
 				require.NoError(err)
 
@@ -100,16 +101,64 @@ func TestCrawl(t *testing.T) {
 					gock.New(url).Get("/").Reply(status)
 				}
 
-				// mock storer error
+				// mock storer error on the first call
 				m.On("StoreResponse", mock.Anything).Return(errBanana).Once()
 			},
 			teardown:      func() { gock.OffAll() },
 			expectedError: errBanana.Error(),
 		},
 		{
+			name: "late storer error",
+			data: testData,
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+				err := initTestData(testData, expectedURLs)
+				require.NoError(err)
+
+				for url, status := range *expectedURLs {
+					// mock network
+					gock.New(url).Get("/").Reply(status)
+				}
+
+				// mock storer error on the last call
+				twoGoodCalls := m.On("StoreResponse", mock.Anything).Return(nil).Twice()
+				m.On("StoreResponse", mock.Anything).Return(errBanana).Once().NotBefore(twoGoodCalls)
+			},
+			teardown:      func() { gock.OffAll() },
+			expectedError: errBanana.Error(),
+		},
+		{
+			name: "error on the first goroutine loop",
+			data: manyURLsWithABadURLTestData,
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+				err := initTestData(manyURLsWithABadURLTestData, expectedURLs)
+				require.NoError(err)
+			},
+			expectedError: "Get \"pippo.pluto.paperino\": unsupported protocol scheme \"\"",
+		},
+		{
+			name: "context canceled error",
+			data: testData,
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+				err := initTestData(testData, expectedURLs)
+				require.NoError(err)
+
+				for url, status := range *expectedURLs {
+					// mock network
+					gock.New(url).Get("/").Reply(status)
+				}
+
+				// mock context canceled
+				m.On("StoreResponse", mock.Anything).Run(func(args mock.Arguments) {
+					cancel()
+				}).Return(nil).Once()
+			},
+			teardown:      func() { gock.OffAll() },
+			expectedError: "context canceled",
+		},
+		{
 			name: "valid data ok",
 			data: testData,
-			setup: func(m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
 				actURLs := *actualURLs
 				err := initTestData(testData, expectedURLs)
 				require.NoError(err)
@@ -134,7 +183,7 @@ func TestCrawl(t *testing.T) {
 		{
 			name: "more than one goroutines loop ok",
 			data: manyURLsTestData,
-			setup: func(m *mockStorer, expectedURLs, actualURLs *map[string]int) {
+			setup: func(cancel context.CancelFunc, m *mockStorer, expectedURLs, actualURLs *map[string]int) {
 				actURLs := *actualURLs
 				err := initTestData(manyURLsTestData, expectedURLs)
 				require.NoError(err)
@@ -160,11 +209,13 @@ func TestCrawl(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			storer := newMockStorer(t)
 			expectedURLs := make(map[string]int)
 			actualURLs := make(map[string]int)
 			if tc.setup != nil {
-				tc.setup(storer, &expectedURLs, &actualURLs)
+				tc.setup(cancel, storer, &expectedURLs, &actualURLs)
 			}
 			if tc.teardown != nil {
 				defer tc.teardown()
@@ -175,7 +226,7 @@ func TestCrawl(t *testing.T) {
 			c, err := New(file, storer)
 			require.NoError(err)
 
-			err = c.Crawl(context.Background())
+			err = c.Crawl(ctx)
 
 			if tc.expectedError != "" {
 				require.ErrorContains(err, tc.expectedError)
