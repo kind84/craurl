@@ -16,6 +16,18 @@ generate-mocks: ## Generates mocks for the tests, using mockery tool
 test:
 	go test -v -race ./crawler/...
 
+.PHONY: cover
+cover:
+	go test ./... -coverprofile=coverage.out
+
+.PHONY: cover-html
+cover-html: cover
+	go tool cover -html=coverage.out -o coverage.html
+
+.PHONY: dep
+dep:
+	go mod download
+
 .PHONY: distclean
 distclean:
 	rm -rf ./dist

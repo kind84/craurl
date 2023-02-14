@@ -3,14 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/kind84/craurl/crawler"
+	"github.com/kind84/craurl/log"
 	"github.com/kind84/craurl/storer"
 )
 
 func main() {
+	log.Init()
+	defer log.Sync()
+
 	// sanity checks:
 	// one argument must be passed
 	usage := `Usage: craurl [filepath]

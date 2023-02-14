@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/kind84/craurl/log"
 )
 
 const maxGoroutines = 100
@@ -77,7 +78,7 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 				case err := <-errChan:
 					return err
 				case <-c.done:
-					log.Println("done")
+					log.Info("done")
 					return nil
 				}
 			}
@@ -86,7 +87,7 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 
 			g.Go(func() error {
 				url := url
-				log.Printf("calling %s", url)
+				log.Debugf("calling %s", url)
 				req, err := http.NewRequestWithContext(ctx, requestMethod, url, nil)
 				if err != nil {
 					return err
@@ -131,7 +132,7 @@ func (c *Crawler) storeResponses(ctx context.Context, resChan chan Response, err
 	for res := range resChan {
 		err := c.storer.StoreResponse(res)
 		if err != nil {
-			log.Print(err)
+			log.Error(err)
 			select {
 			case <-ctx.Done():
 			case errChan <- err:
