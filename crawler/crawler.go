@@ -101,6 +101,8 @@ func (c *Crawler) Crawl(ctx context.Context) error {
 				status := resp.StatusCode
 				timestamp := time.Now().UTC()
 
+				log.Debugf("URL: %s   STATUS: %d\n", url, status)
+
 				res := Response{
 					URL:       url,
 					Status:    status,
