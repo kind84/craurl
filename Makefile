@@ -1,5 +1,7 @@
 GOBINARY=craurl
 
+all: build
+
 .PHONY: build
 build:
 	go build -o ./dist/$(GOBINARY) ./cmd
