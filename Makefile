@@ -8,17 +8,21 @@ build:
 run: build
 	./dist/$(GOBINARY) ./testdata/urls.txt
 
+.PHONY: docker
+docker:
+	docker build -t craurl .
+
 .PHONY: generate-mocks
 generate-mocks: ## Generates mocks for the tests, using mockery tool
 	mockery --name=storer --dir=./crawler --output=./crawler --outpkg=crawler --inpackage --structname=mockStorer --filename=mock_storer.go
 
 .PHONY: test
 test:
-	go test -v -race ./crawler/...
+	go test -race ./...
 
 .PHONY: cover
 cover:
-	go test ./... -coverprofile=coverage.out
+	go test -coverprofile=coverage.out ./...
 
 .PHONY: cover-html
 cover-html: cover
@@ -31,3 +35,4 @@ dep:
 .PHONY: distclean
 distclean:
 	rm -rf ./dist
+

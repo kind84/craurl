@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/kind84/craurl/crawler"
 	"github.com/kind84/craurl/log"
@@ -14,30 +15,32 @@ func main() {
 	log.Init()
 	defer log.Sync()
 
-	// sanity checks:
-	// one argument must be passed
 	usage := `Usage: craurl [filepath]
- filepath	path of the file containing the urls to crawl`
+	filepath	path of the file containing the urls to crawl`
+
+	// sanity checks:
+	// - one argument must be passed
 	if len(os.Args) != 2 || os.Args[1] == "--help" || os.Args[1] == "-h" {
 		fmt.Println(usage)
 		os.Exit(0)
 	}
-
-	// must be a valid file path
+	// - must be a valid file path
 	fp := os.Args[1]
 	if _, err := os.Stat(fp); err != nil {
-		log.Fatal("file not found")
+		log.Fatalf("file not found: %s", fp)
 	}
 
-	// open the source for reading
+	// open the source file for reading
 	source, err := os.Open(fp)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer source.Close()
 
-	// create output file
-	output, err := os.Create("out.txt")
+	// create output file in the same directory of the source file
+	dir := filepath.Dir(fp)
+	outputPath := filepath.Join(dir, "out.txt")
+	output, err := os.Create(outputPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -60,4 +63,5 @@ func main() {
 	if err := c.Crawl(ctx); err != nil {
 		log.Fatal(err)
 	}
+	log.Infof("output stored in %s", outputPath)
 }
