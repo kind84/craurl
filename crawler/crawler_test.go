@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/h2non/gock"
+	"github.com/kind84/craurl/log"
 	"github.com/stretchr/testify/assert"
 	mock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,12 @@ const (
 	badTestData                 = "../testdata/bad-url.txt"
 	tooLongData                 = "../testdata/too-long.txt"
 )
+
+func TestMain(m *testing.M) {
+	log.Init()
+	code := m.Run()
+	os.Exit(code)
+}
 
 func initTestData(source string, urls *map[string]int) error {
 	rand.Seed(time.Now().UTC().UnixNano())
